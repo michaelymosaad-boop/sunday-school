@@ -3,6 +3,8 @@
 -- شغّل الملف ده كله مرة واحدة في SQL Editor
 -- ============================================================
 
+create extension if not exists pgcrypto with schema extensions;
+
 -- ---------- 1) الإعدادات (صف واحد بس) ----------
 create table public.church_settings (
   id              int primary key default 1 check (id = 1),
@@ -30,7 +32,7 @@ create table public.kids (
   id          bigint generated always as identity primary key,
   full_name   text not null,                                   -- الاسم الثلاثي (ده اللي بيظهر)
   class_id    bigint not null references public.classes(id) on delete restrict,
-  card_code   text not null unique default encode(gen_random_bytes(4), 'hex'),  -- كود الكارت (الـ QR)
+  card_code   text not null unique default encode(extensions.gen_random_bytes(4), 'hex'),  -- كود الكارت (الـ QR)
   photo_url   text,                                            -- رابط صورة من Google Drive
   is_active   boolean not null default true,
   created_at  timestamptz not null default now()
