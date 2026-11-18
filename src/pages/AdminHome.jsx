@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
+import AdminKids from './AdminKids.jsx';
 
 export default function AdminHome({ profile }) {
+  const [tab, setTab] = useState('home');
   const [counts, setCounts] = useState({ kids: null, classes: null, events: null });
 
   useEffect(() => {
@@ -15,10 +17,10 @@ export default function AdminHome({ profile }) {
     Promise.all([count('kids'), count('classes'), count('events')])
       .then(([kids, classes, events]) => setCounts({ kids, classes, events }))
       .catch((e) => console.error(e));
-  }, []);
+  }, [tab]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <div className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-extrabold text-indigo-900">لوحة الأدمن</h1>
         <button
@@ -29,16 +31,35 @@ export default function AdminHome({ profile }) {
         </button>
       </header>
 
-      <p className="text-slate-600">أهلاً {profile.display_name}. الاتصال بقاعدة البيانات شغّال.</p>
+      <nav className="no-print flex gap-2">
+        <Tab active={tab === 'home'} onClick={() => setTab('home')}>الرئيسية</Tab>
+        <Tab active={tab === 'kids'} onClick={() => setTab('kids')}>المخدومين والفصول</Tab>
+      </nav>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Stat label="المخدومين" value={counts.kids} />
-        <Stat label="الفصول" value={counts.classes} />
-        <Stat label="الفعاليات" value={counts.events} />
-      </div>
+      {tab === 'home' && (
+        <>
+          <p className="text-slate-600">أهلاً {profile.display_name}. الاتصال بقاعدة البيانات شغّال.</p>
+          <div className="grid grid-cols-3 gap-4">
+            <Stat label="المخدومين" value={counts.kids} />
+            <Stat label="الفصول" value={counts.classes} />
+            <Stat label="الفعاليات" value={counts.events} />
+          </div>
+        </>
+      )}
 
-      <p className="text-sm text-slate-500">الخطوة الجاية: إدارة المخدومين والفصول والفعاليات.</p>
+      {tab === 'kids' && <AdminKids />}
     </div>
+  );
+}
+
+function Tab({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl px-4 py-2 font-bold ${active ? 'bg-indigo-700 text-white' : 'bg-white text-slate-700 shadow'}`}
+    >
+      {children}
+    </button>
   );
 }
 
