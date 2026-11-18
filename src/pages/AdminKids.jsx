@@ -12,9 +12,20 @@ const COL = {
   phone: 'رقم التليفون',
 };
 
-// بيقرا الصف بأي مسافات زيادة في اسم العمود
+// توحيد كتابة العربي (ة/ه، ى/ي، أ/ا) والمسافات، عشان "الصوره" و"الصورة" يبقوا نفس العمود
+function norm(s) {
+  return String(s ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[أإآ]/g, 'ا');
+}
+
+// بيقرا الصف بأي مسافات أو اختلاف في كتابة اسم العمود
 function readCol(row, header) {
-  const key = Object.keys(row).find((k) => k.trim() === header);
+  const want = norm(header);
+  const key = Object.keys(row).find((k) => norm(k) === want);
   return key ? String(row[key] ?? '').trim().replace(/\s+/g, ' ') : '';
 }
 
@@ -120,7 +131,7 @@ export default function AdminKids() {
         .filter((r) => r.name || r.cls || r.cardUrl);
       if (!rows.length) throw new Error('الملف فاضي أو أسماء الأعمدة غلط');
 
-      const total = { added: 0, skipped: [], errors: [] };
+      const total = { added: 0, skipped: [], errors: [], warnings: [] };
       for (let i = 0; i < rows.length; i += 10) {
         setMsg(`بيتم الاستيراد... ${Math.min(i + 10, rows.length)} من ${rows.length}`);
         const { data, error } = await supabase.functions.invoke('import-kids', {
@@ -130,10 +141,12 @@ export default function AdminKids() {
         total.added += data.added;
         total.skipped.push(...data.skipped);
         total.errors.push(...data.errors);
+        total.warnings.push(...(data.warnings ?? []));
       }
 
       setMsg(`تم إضافة ${total.added} مخدوم. اتجاهل ${total.skipped.length}.`);
-      if (total.errors.length) setErr(`أخطاء (${total.errors.length}):\n` + total.errors.join('\n'));
+      const problems = [...total.errors, ...total.warnings];
+      if (problems.length) setErr(`ملاحظات (${problems.length}):\n` + problems.join('\n'));
       await load();
     });
   }

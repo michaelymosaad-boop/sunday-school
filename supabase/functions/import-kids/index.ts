@@ -1,4 +1,4 @@
-// دالة الاستيراد: بتقرا صورة الكارت من Drive، تفك الـ QR، وتضيف المخدوم
+// دالة الاستيراد: بتقرا صورة الكارت من Drive، تفك الـ QR، تحفظ الصور في Storage، وتضيف المخدوم
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import jsQR from 'npm:jsqr@1.4.0';
 import { PNG } from 'npm:pngjs@7.0.0';
@@ -59,14 +59,15 @@ function codeFromQR(text: string): string {
   return text.trim();
 }
 
-async function fetchDrive(url: string): Promise<Uint8Array> {
+// بيجيب الصورة من Drive ويرجّع البايتات ونوعها
+async function fetchDrive(url: string): Promise<{ bytes: Uint8Array; type: string }> {
   const id = driveId(url);
   if (!id) throw new Error('لينك Drive مش صح');
   const res = await fetch(`https://drive.google.com/uc?export=download&id=${id}`, { redirect: 'follow' });
   if (!res.ok) throw new Error('الملف مش متاح. اتأكد إنه Anyone with the link');
-  const type = res.headers.get('content-type') ?? '';
+  const type = (res.headers.get('content-type') ?? '').split(';')[0];
   if (!type.startsWith('image/')) throw new Error('الملف مش صورة (ممكن الملف كبير أو مش متاح)');
-  return new Uint8Array(await res.arrayBuffer());
+  return { bytes: new Uint8Array(await res.arrayBuffer()), type };
 }
 
 Deno.serve(async (req) => {
@@ -89,7 +90,7 @@ Deno.serve(async (req) => {
   const rows: Array<{ name: string; cls: string; cardUrl: string; photoUrl?: string; birth?: string; phone?: string }> =
     body.rows ?? [];
 
-  const report = { added: 0, skipped: [] as string[], errors: [] as string[] };
+  const report = { added: 0, skipped: [] as string[], errors: [] as string[], warnings: [] as string[] };
 
   // 2) الفصول
   const classNames = [...new Set(rows.map((r) => (r.cls ?? '').trim()).filter(Boolean))];
@@ -127,8 +128,9 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const img = await fetchDrive(r.cardUrl);
-      const text = decodeQR(img);
+      // الكارت: نفك الـ QR منه
+      const card = await fetchDrive(r.cardUrl);
+      const text = decodeQR(card.bytes);
       if (!text) {
         report.errors.push(`${label}: مش لاقي QR في صورة الكارت`);
         continue;
@@ -139,21 +141,49 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const pid = r.photoUrl ? driveId(r.photoUrl) : null;
-      const photo = pid ? `https://drive.google.com/thumbnail?id=${pid}&sz=w400` : null;
-
+      // 5) نضيف المخدوم
       const { data: kid, error: kErr } = await admin
         .from('kids')
-        .insert({ full_name: name, class_id: cid, card_code: code, photo_url: photo })
+        .insert({ full_name: name, class_id: cid, card_code: code })
         .select('id')
         .single();
       if (kErr) throw kErr;
 
+      // 6) صورة الكارت: نحفظها في Storage خاصة
+      const cardExt = card.type === 'image/png' ? 'png' : 'jpg';
+      const cardPath = `${kid.id}.${cardExt}`;
+      const { error: cErr } = await admin.storage
+        .from('kid-cards')
+        .upload(cardPath, card.bytes, { contentType: card.type, upsert: true });
+      if (cErr) {
+        report.warnings.push(`${label}: صورة الكارت ما اتحفظتش (${cErr.message})`);
+      } else {
+        await admin.from('kids').update({ card_image_path: cardPath }).eq('id', kid.id);
+      }
+
+      // 7) صورة المخدوم: نحفظها في Storage عامة
+      if (r.photoUrl) {
+        try {
+          const photo = await fetchDrive(r.photoUrl);
+          const photoExt = photo.type === 'image/png' ? 'png' : 'jpg';
+          const photoPath = `${kid.id}.${photoExt}`;
+          const { error: pErr } = await admin.storage
+            .from('kid-photos')
+            .upload(photoPath, photo.bytes, { contentType: photo.type, upsert: true });
+          if (pErr) throw pErr;
+          const { data: pub } = admin.storage.from('kid-photos').getPublicUrl(photoPath);
+          await admin.from('kids').update({ photo_url: pub.publicUrl }).eq('id', kid.id);
+        } catch (e) {
+          report.warnings.push(`${label}: الصورة ما اتحفظتش (${(e as Error).message})`);
+        }
+      }
+
+      // 8) بيانات خاصة (الأدمن بس)
       if (r.birth || r.phone) {
         const { error: dErr } = await admin
           .from('kid_details')
           .insert({ kid_id: kid.id, birth_date: r.birth || null, phone: r.phone || null });
-        if (dErr) throw dErr;
+        if (dErr) report.warnings.push(`${label}: البيانات الخاصة ما اتحفظتش (${dErr.message})`);
       }
 
       codes.add(code);
@@ -166,5 +196,3 @@ Deno.serve(async (req) => {
 
   return json(report);
 });
-
-export { codeFromQR, driveId, decodeQR };
