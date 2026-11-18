@@ -5,6 +5,7 @@ import ChangePassword from './pages/ChangePassword.jsx';
 import AdminHome from './pages/AdminHome.jsx';
 import ServantHome from './pages/ServantHome.jsx';
 import KidPublic from './pages/KidPublic.jsx';
+import KidEntry from './pages/KidEntry.jsx';
 
 export default function App() {
   const [profile, setProfile] = useState(null);
@@ -39,7 +40,9 @@ export default function App() {
   }
 
   if (!profile || !profile.is_active) {
-    return <Login onDone={refresh} />;
+    // المخدوم يدخل بالكود، والخادم والأدمن بالـ ?staff=1
+    const staffMode = new URLSearchParams(window.location.search).has('staff');
+    return staffMode ? <Login onDone={refresh} /> : <KidEntry />;
   }
 
   if (profile.must_change_password) {
