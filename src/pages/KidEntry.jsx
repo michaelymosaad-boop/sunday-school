@@ -31,9 +31,6 @@ export default function KidEntry() {
           <button className="w-full rounded-xl bg-indigo-700 py-3 font-bold text-white">دخول</button>
         </form>
 
-        <a href="?staff=1" className="block text-sm text-slate-500 underline">
-          دخول الخدام والأدمن
-        </a>
       </div>
     </div>
   );
