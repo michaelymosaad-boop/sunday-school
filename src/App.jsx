@@ -4,6 +4,7 @@ import Login from './pages/Login.jsx';
 import ChangePassword from './pages/ChangePassword.jsx';
 import AdminHome from './pages/AdminHome.jsx';
 import ServantHome from './pages/ServantHome.jsx';
+import KidPublic from './pages/KidPublic.jsx';
 
 export default function App() {
   const [profile, setProfile] = useState(null);
@@ -28,6 +29,10 @@ export default function App() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // دخول المخدوم: الـ QR بيفتح الموقع بالشكل ده ?k=الكود
+  const kidCode = new URLSearchParams(window.location.search).get('k');
+  if (kidCode) return <KidPublic code={kidCode} />;
 
   if (!ready) {
     return <div className="grid min-h-screen place-items-center text-slate-500">جاري التحميل...</div>;

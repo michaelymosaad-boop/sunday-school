@@ -3,10 +3,14 @@ import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
 import { supabase } from '../lib/supabase.js';
 
-const COL_NAME = 'الاسم الثلاثي';
-const COL_CLASS = 'الفصل';
-const COL_CODE = 'كود الكارت';
-const COL_PHOTO = 'رابط الصورة';
+const COL = {
+  name: 'الاسم الثلاثي',
+  cls: 'الفصل',
+  card: 'رابط الكارت',
+  photo: 'رابط الصورة',
+  birth: 'تاريخ الميلاد',
+  phone: 'رقم التليفون',
+};
 
 // بيقرا الصف بأي مسافات زيادة في اسم العمود
 function readCol(row, header) {
@@ -99,80 +103,47 @@ export default function AdminKids() {
     });
   }
 
+  // الاستيراد: الملف بيتقري هنا، وكل صف بيتبعت للسيرفر يفك الـ QR من لينك الكارت
   function importFile(file) {
     run(async () => {
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
-      const clean = rows
+      const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false });
+      const rows = raw
         .map((r) => ({
-          name: readCol(r, COL_NAME),
-          cls: readCol(r, COL_CLASS),
-          code: readCol(r, COL_CODE),
-          photo: readCol(r, COL_PHOTO),
+          name: readCol(r, COL.name),
+          cls: readCol(r, COL.cls),
+          cardUrl: readCol(r, COL.card),
+          photoUrl: readCol(r, COL.photo),
+          birth: readCol(r, COL.birth),
+          phone: readCol(r, COL.phone),
         }))
-        .filter((r) => r.name || r.cls || r.code);
+        .filter((r) => r.name || r.cls || r.cardUrl);
+      if (!rows.length) throw new Error('الملف فاضي أو أسماء الأعمدة غلط');
 
-      const bad = clean.filter((r) => !r.name || !r.cls);
-      const dupInFile = clean.map((r) => r.code).filter(Boolean);
-      if (new Set(dupInFile).size !== dupInFile.length) throw new Error('فيه كود كارت متكرر في الملف. صلّحه وارفع تاني');
-      if (bad.length) throw new Error(`في ${bad.length} صف ناقص اسم أو فصل. صلّحه وارفع الملف تاني`);
-      if (!clean.length) throw new Error('الملف فاضي أو اسم العمود غلط');
-
-      // 1) الفصول الجديدة
-      const classNames = [...new Set(clean.map((r) => r.cls))];
-      const { error: ce } = await supabase
-        .from('classes')
-        .upsert(classNames.map((n) => ({ name: n })), { onConflict: 'name', ignoreDuplicates: true });
-      if (ce) throw ce;
-
-      // 2) نجيب الـ ids
-      const { data: allClasses, error: qe } = await supabase.from('classes').select('id,name');
-      if (qe) throw qe;
-      const idByName = new Map(allClasses.map((c) => [c.name, c.id]));
-
-      // 3) نتجاهل المخدومين الموجودين في نفس الفصل
-      const { data: existing, error: ee } = await supabase.from('kids').select('full_name,class_id,card_code');
-      if (ee) throw ee;
-      const seen = new Set(existing.map((k) => `${k.class_id}|${k.full_name}`));
-      const codes = new Set(existing.map((k) => k.card_code));
-
-      const toInsert = [];
-      let skipped = 0;
-      for (const r of clean) {
-        const class_id = idByName.get(r.cls);
-        const key = `${class_id}|${r.name}`;
-        if (seen.has(key) || (r.code && codes.has(r.code))) {
-          skipped++;
-          continue;
-        }
-        seen.add(key);
-        if (r.code) codes.add(r.code);
-        toInsert.push({
-          full_name: r.name,
-          class_id,
-          ...(r.code ? { card_code: r.code } : {}),
-          ...(r.photo ? { photo_url: r.photo } : {}),
+      const total = { added: 0, skipped: [], errors: [] };
+      for (let i = 0; i < rows.length; i += 10) {
+        setMsg(`بيتم الاستيراد... ${Math.min(i + 10, rows.length)} من ${rows.length}`);
+        const { data, error } = await supabase.functions.invoke('import-kids', {
+          body: { rows: rows.slice(i, i + 10) },
         });
-      }
-
-      // 4) الإضافة على دفعات
-      for (let i = 0; i < toInsert.length; i += 100) {
-        const { error } = await supabase.from('kids').insert(toInsert.slice(i, i + 100));
         if (error) throw error;
+        total.added += data.added;
+        total.skipped.push(...data.skipped);
+        total.errors.push(...data.errors);
       }
 
-      setMsg(`تم إضافة ${toInsert.length} مخدوم، واتجاهل ${skipped} لأنهم موجودين قبل كده`);
+      setMsg(`تم إضافة ${total.added} مخدوم. اتجاهل ${total.skipped.length}.`);
+      if (total.errors.length) setErr(`أخطاء (${total.errors.length}):\n` + total.errors.join('\n'));
       await load();
     });
   }
 
   function downloadTemplate() {
     const ws = XLSX.utils.aoa_to_sheet([
-      [COL_NAME, COL_CLASS, COL_CODE, COL_PHOTO],
-      ['مينا جورج إبراهيم', 'الصف الرابع', '', ''],
-      ['مريم سامح فايز', 'الصف الخامس', '', ''],
+      [COL.name, COL.cls, COL.card, COL.photo, COL.birth, COL.phone],
+      ['مينا جورج إبراهيم', 'الصف الرابع', 'https://drive.google.com/file/d/ID-الكارت/view', 'https://drive.google.com/file/d/ID-الصورة/view', '2014-05-12', '01000000000'],
     ]);
-    ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 40 }, { wch: 50 }];
+    ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 55 }, { wch: 55 }, { wch: 14 }, { wch: 16 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'المخدومين');
     XLSX.writeFile(wb, 'قالب-المخدومين.xlsx');
@@ -180,9 +151,8 @@ export default function AdminKids() {
 
   return (
     <div className="space-y-6">
-      {/* رسائل */}
       {msg && <p className="rounded-xl bg-emerald-50 p-3 font-semibold text-emerald-700">{msg}</p>}
-      {err && <p className="rounded-xl bg-red-50 p-3 font-semibold text-red-600">{err}</p>}
+      {err && <p className="whitespace-pre-line rounded-xl bg-red-50 p-3 font-semibold text-red-600">{err}</p>}
 
       {/* الفصول */}
       <section className="space-y-3 rounded-2xl bg-white p-5 shadow">
@@ -232,7 +202,8 @@ export default function AdminKids() {
       <section className="space-y-3 rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-extrabold text-indigo-900">استيراد من Excel</h2>
         <p className="text-sm text-slate-500">
-          الأعمدة الأساسية: <b>{COL_NAME}</b> و<b>{COL_CLASS}</b>. وبعدها اختياري: <b>{COL_CODE}</b> (كود الـ QR بتاع الكارت، لو فاضي التطبيق بيولّد كود جديد)، و<b>{COL_PHOTO}</b> (رابط الصورة من Google Drive). الفصل لو مش موجود هيتضاف لوحده.
+          الأعمدة: <b>{COL.name}</b> و<b>{COL.cls}</b> و<b>{COL.card}</b> (لينك صورة الكارت اللي فيه الـ QR) و<b>{COL.photo}</b>.
+          واختياري: <b>{COL.birth}</b> و<b>{COL.phone}</b>. الملفات في Drive لازم تكون Anyone with the link.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={downloadTemplate} className="rounded-xl bg-slate-200 px-4 py-2 font-semibold">
@@ -248,7 +219,7 @@ export default function AdminKids() {
         </div>
       </section>
 
-      {/* قائمة المخدومين وكروت QR */}
+      {/* قائمة المخدومين */}
       <section className="space-y-3 rounded-2xl bg-white p-5 shadow">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-extrabold text-indigo-900">المخدومين ({visibleKids.length})</h2>
