@@ -40,9 +40,11 @@ export default function App() {
   }
 
   if (!profile || !profile.is_active) {
-    // المخدوم يدخل بالكود، والخادم والأدمن بالـ ?staff=1
-    const staffMode = new URLSearchParams(window.location.search).has('staff');
-    return staffMode ? <Login onDone={refresh} /> : <KidEntry />;
+    // المخدوم يدخل بالكود. الأدمن والخادم كل واحد ليه لينك فيه كلمة تعبر عن صلاحيته
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('admin')) return <Login onDone={refresh} title="دخول الأدمن" />;
+    if (params.has('servant')) return <Login onDone={refresh} title="دخول الخادم" />;
+    return <KidEntry />;
   }
 
   if (profile.must_change_password) {

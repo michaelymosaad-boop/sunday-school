@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 
-export default function Login({ onDone }) {
+export default function Login({ onDone, title = 'تسجيل الدخول' }) {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -41,7 +41,7 @@ export default function Login({ onDone }) {
   return (
     <div className="grid min-h-screen place-items-center p-4">
       <form onSubmit={submit} className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 shadow">
-        <h1 className="text-center text-2xl font-extrabold text-indigo-900">تسجيل الدخول</h1>
+        <h1 className="text-center text-2xl font-extrabold text-indigo-900">{title}</h1>
 
         <label className="block space-y-1">
           <span className="text-sm font-semibold text-slate-600">اسم المستخدم</span>
