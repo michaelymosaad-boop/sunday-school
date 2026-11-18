@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase.js';
 
 const COL_NAME = 'الاسم الثلاثي';
 const COL_CLASS = 'الفصل';
+const COL_CODE = 'كود الكارت';
+const COL_PHOTO = 'رابط الصورة';
 
 // بيقرا الصف بأي مسافات زيادة في اسم العمود
 function readCol(row, header) {
@@ -102,10 +104,17 @@ export default function AdminKids() {
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
       const clean = rows
-        .map((r) => ({ name: readCol(r, COL_NAME), cls: readCol(r, COL_CLASS) }))
-        .filter((r) => r.name || r.cls);
+        .map((r) => ({
+          name: readCol(r, COL_NAME),
+          cls: readCol(r, COL_CLASS),
+          code: readCol(r, COL_CODE),
+          photo: readCol(r, COL_PHOTO),
+        }))
+        .filter((r) => r.name || r.cls || r.code);
 
       const bad = clean.filter((r) => !r.name || !r.cls);
+      const dupInFile = clean.map((r) => r.code).filter(Boolean);
+      if (new Set(dupInFile).size !== dupInFile.length) throw new Error('فيه كود كارت متكرر في الملف. صلّحه وارفع تاني');
       if (bad.length) throw new Error(`في ${bad.length} صف ناقص اسم أو فصل. صلّحه وارفع الملف تاني`);
       if (!clean.length) throw new Error('الملف فاضي أو اسم العمود غلط');
 
@@ -122,21 +131,28 @@ export default function AdminKids() {
       const idByName = new Map(allClasses.map((c) => [c.name, c.id]));
 
       // 3) نتجاهل المخدومين الموجودين في نفس الفصل
-      const { data: existing, error: ee } = await supabase.from('kids').select('full_name,class_id');
+      const { data: existing, error: ee } = await supabase.from('kids').select('full_name,class_id,card_code');
       if (ee) throw ee;
       const seen = new Set(existing.map((k) => `${k.class_id}|${k.full_name}`));
+      const codes = new Set(existing.map((k) => k.card_code));
 
       const toInsert = [];
       let skipped = 0;
       for (const r of clean) {
         const class_id = idByName.get(r.cls);
         const key = `${class_id}|${r.name}`;
-        if (seen.has(key)) {
+        if (seen.has(key) || (r.code && codes.has(r.code))) {
           skipped++;
           continue;
         }
         seen.add(key);
-        toInsert.push({ full_name: r.name, class_id });
+        if (r.code) codes.add(r.code);
+        toInsert.push({
+          full_name: r.name,
+          class_id,
+          ...(r.code ? { card_code: r.code } : {}),
+          ...(r.photo ? { photo_url: r.photo } : {}),
+        });
       }
 
       // 4) الإضافة على دفعات
@@ -152,11 +168,11 @@ export default function AdminKids() {
 
   function downloadTemplate() {
     const ws = XLSX.utils.aoa_to_sheet([
-      [COL_NAME, COL_CLASS],
-      ['مينا جورج إبراهيم', 'الصف الرابع'],
-      ['مريم سامح فايز', 'الصف الخامس'],
+      [COL_NAME, COL_CLASS, COL_CODE, COL_PHOTO],
+      ['مينا جورج إبراهيم', 'الصف الرابع', '', ''],
+      ['مريم سامح فايز', 'الصف الخامس', '', ''],
     ]);
-    ws['!cols'] = [{ wch: 30 }, { wch: 18 }];
+    ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 40 }, { wch: 50 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'المخدومين');
     XLSX.writeFile(wb, 'قالب-المخدومين.xlsx');
@@ -216,7 +232,7 @@ export default function AdminKids() {
       <section className="space-y-3 rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-extrabold text-indigo-900">استيراد من Excel</h2>
         <p className="text-sm text-slate-500">
-          الملف لازم فيه عمودين بالاسم بالظبط: <b>{COL_NAME}</b> و<b>{COL_CLASS}</b>. الفصل لو مش موجود هيتضاف لوحده.
+          الأعمدة الأساسية: <b>{COL_NAME}</b> و<b>{COL_CLASS}</b>. وبعدها اختياري: <b>{COL_CODE}</b> (كود الـ QR بتاع الكارت، لو فاضي التطبيق بيولّد كود جديد)، و<b>{COL_PHOTO}</b> (رابط الصورة من Google Drive). الفصل لو مش موجود هيتضاف لوحده.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={downloadTemplate} className="rounded-xl bg-slate-200 px-4 py-2 font-semibold">
