@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { supabase, loadProfile } from './lib/supabase.js';
-import Login from './pages/Login.jsx';
 import ChangePassword from './pages/ChangePassword.jsx';
 import KidPublic from './pages/KidPublic.jsx';
 import KidEntry from './pages/KidEntry.jsx';
@@ -47,11 +46,8 @@ export default function App() {
   }
 
   if (!profile || !profile.is_active) {
-    // المخدوم يدخل بالكود. الأدمن والخادم كل واحد ليه لينك فيه كلمة تعبر عن صلاحيته
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('admin')) return <Login onDone={refresh} title="دخول الأدمن" />;
-    if (params.has('servant')) return <Login onDone={refresh} title="دخول الخادم" />;
-    return <KidEntry />;
+    // شاشة موحدة: المخدوم بيدخل بالكود/QR، الخادم/الأدمن بيدوس "دخول كخادم أو أدمن"
+    return <KidEntry onStaff={refresh} />;
   }
 
   if (profile.must_change_password) {

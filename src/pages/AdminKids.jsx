@@ -207,6 +207,7 @@ export default function AdminKids() {
   }
 
   function deleteClass(c) {
+    if (!c) return;
     const inClass = kids.filter((k) => k.class_id === c.id).length;
     if (inClass > 0) {
       setErr(`مينفعش تمسح "${c.name}" لسه فيه ${inClass} مخدوم فيه. انقلهم لفصل تاني أو امسحهم الأول.`);
@@ -216,6 +217,8 @@ export default function AdminKids() {
     run(async () => {
       const { error } = await supabase.from('classes').delete().eq('id', c.id);
       if (error) throw error;
+      setEditingClassId(null);
+      setEditClassName('');
       setMsg('تم مسح الفصل');
       await load();
     });
@@ -244,10 +247,14 @@ export default function AdminKids() {
   }
 
   function deleteKid(k) {
+    if (!k) return;
     if (!window.confirm(`متأكد إنك عايز تمسح "${k.full_name}"؟ هيتمسح معاه كل سجل حضوره ونقاطه، ومينفعش ترجعه.`)) return;
     run(async () => {
       const { error } = await supabase.from('kids').delete().eq('id', k.id);
       if (error) throw error;
+      setEditingKidId(null);
+      setEditKidName('');
+      setEditKidClass('');
       setMsg('تم المسح');
       await load();
     });
