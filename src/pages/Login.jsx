@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
-import QrScanner from '../components/QrScanner.jsx';
+
+// مكتبة قراءة QR تقيلة، بنأجل تحميلها لحد ما حد يدوس على "امسح بالكاميرا" فعلاً
+const QrScanner = lazy(() => import('../components/QrScanner.jsx'));
 
 export default function Login({ onDone, title = 'تسجيل الدخول' }) {
   const [login, setLogin] = useState('');
@@ -56,7 +58,9 @@ export default function Login({ onDone, title = 'تسجيل الدخول' }) {
         <h1 className="text-center text-2xl font-extrabold text-indigo-900">{title}</h1>
 
         {scanning ? (
-          <QrScanner onResult={onScanned} onClose={() => setScanning(false)} />
+          <Suspense fallback={<p className="text-slate-500">جاري فتح الكاميرا...</p>}>
+            <QrScanner onResult={onScanned} onClose={() => setScanning(false)} />
+          </Suspense>
         ) : (
           <button
             type="button"

@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { supabase, loadProfile } from './lib/supabase.js';
 import Login from './pages/Login.jsx';
 import ChangePassword from './pages/ChangePassword.jsx';
-import AdminHome from './pages/AdminHome.jsx';
-import ServantHome from './pages/ServantHome.jsx';
 import KidPublic from './pages/KidPublic.jsx';
 import KidEntry from './pages/KidEntry.jsx';
+
+// الأدمن والخادم فيهم مكتبات تقيلة (Excel، QR) مش لازمة للمخدوم لما بيسحب كارته،
+// فبنأجل تحميلهم لحد ما حد فعلاً يدخل كأدمن أو خادم. كده صفحة المخدوم بتفتح بسرعة.
+const AdminHome = lazy(() => import('./pages/AdminHome.jsx'));
+const ServantHome = lazy(() => import('./pages/ServantHome.jsx'));
+
+function PageLoading() {
+  return <div className="grid min-h-screen place-items-center text-slate-500">جاري التحميل...</div>;
+}
 
 export default function App() {
   const [profile, setProfile] = useState(null);
@@ -52,8 +59,16 @@ export default function App() {
   }
 
   if (profile.role === 'admin') {
-    return <AdminHome profile={profile} />;
+    return (
+      <Suspense fallback={<PageLoading />}>
+        <AdminHome profile={profile} />
+      </Suspense>
+    );
   }
 
-  return <ServantHome profile={profile} />;
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <ServantHome profile={profile} />
+    </Suspense>
+  );
 }
