@@ -45,7 +45,7 @@ export default function AdminKids() {
   async function load() {
     const [c, k] = await Promise.all([
       supabase.from('classes').select('id,name').order('name'),
-      supabase.from('kids').select('id,full_name,card_code,class_id').order('full_name'),
+      supabase.from('kids').select('id,full_name,card_code,short_code,class_id').order('full_name'),
     ]);
     if (c.error) throw c.error;
     if (k.error) throw k.error;
@@ -57,13 +57,16 @@ export default function AdminKids() {
     load().catch((e) => setErr(e.message));
   }, []);
 
-  // كود QR لكل كارت (بيتولد في المتصفح من كود الكارت)
+  // كيوار الطباعة بتاعنا بيفتح الموقع مباشرة (بالكود المختصر) عشان يشتغل من أي كاميرا موبايل عادية
+  // (مختلف تمامًا عن كيوار الكارت الأصلي بتاع أبناء النور، ده ما بيتلمسش خالص)
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const base = `${window.location.origin}${window.location.pathname}`;
       const out = {};
       for (const k of kids) {
-        out[k.id] = await QRCode.toDataURL(k.card_code, { width: 220, margin: 1 });
+        const link = `${base}?k=${encodeURIComponent(k.short_code)}`;
+        out[k.id] = await QRCode.toDataURL(link, { width: 220, margin: 1 });
       }
       if (!cancelled) setQrs(out);
     })();
@@ -155,6 +158,7 @@ export default function AdminKids() {
     const ws = XLSX.utils.aoa_to_sheet([
       [COL.name, COL.cls, COL.card, COL.photo, COL.birth, COL.phone],
       ['مينا جورج إبراهيم', 'الصف الرابع', 'https://drive.google.com/file/d/ID-الكارت/view', 'https://drive.google.com/file/d/ID-الصورة/view', '2014-05-12', '01000000000'],
+      ['فادي سمير نجيب', 'الصف الرابع', '', 'https://drive.google.com/file/d/ID-الصورة/view', '', ''],
     ]);
     ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 55 }, { wch: 55 }, { wch: 14 }, { wch: 16 }];
     const wb = XLSX.utils.book_new();
@@ -215,8 +219,10 @@ export default function AdminKids() {
       <section className="space-y-3 rounded-2xl bg-white p-5 shadow">
         <h2 className="text-lg font-extrabold text-indigo-900">استيراد من Excel</h2>
         <p className="text-sm text-slate-500">
-          الأعمدة: <b>{COL.name}</b> و<b>{COL.cls}</b> و<b>{COL.card}</b> (لينك صورة الكارت اللي فيه الـ QR) و<b>{COL.photo}</b>.
-          واختياري: <b>{COL.birth}</b> و<b>{COL.phone}</b>. الملفات في Drive لازم تكون Anyone with the link.
+          لازم: <b>{COL.name}</b> و<b>{COL.cls}</b> و<b>{COL.photo}</b> (لينك الصورة من Drive).
+          اختياري: <b>{COL.card}</b> — لو عند المخدوم كارت QR جاهز من قبل (زي أبناء النور) حط لينك صورة الكارت هنا وهنفك
+          الكود منه، ولو مفيش سيبه فاضي وهنولّد كود جديد للمخدوم تلقائي. واختياري كمان: <b>{COL.birth}</b> و<b>{COL.phone}</b>.
+          الملفات في Drive لازم تكون Anyone with the link.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button onClick={downloadTemplate} className="rounded-xl bg-slate-200 px-4 py-2 font-semibold">
@@ -261,6 +267,7 @@ export default function AdminKids() {
               {qrs[k.id] ? <img src={qrs[k.id]} alt="" className="h-28 w-28" /> : <div className="h-28 w-28" />}
               <div className="mt-2 font-bold text-slate-800">{k.full_name}</div>
               <div className="text-xs text-slate-500">{className(k.class_id)}</div>
+              <div className="mt-1 font-mono text-xs tracking-widest text-slate-400">{k.short_code}</div>
             </div>
           ))}
         </div>
