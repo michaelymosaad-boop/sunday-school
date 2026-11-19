@@ -42,6 +42,13 @@ export default function AdminKids() {
   const [classId, setClassId] = useState('');
   const [filterClass, setFilterClass] = useState('');
 
+  const [editingClassId, setEditingClassId] = useState(null);
+  const [editClassName, setEditClassName] = useState('');
+
+  const [editingKidId, setEditingKidId] = useState(null);
+  const [editKidName, setEditKidName] = useState('');
+  const [editKidClass, setEditKidClass] = useState('');
+
   async function load() {
     const [c, k] = await Promise.all([
       supabase.from('classes').select('id,name').order('name'),
@@ -100,6 +107,71 @@ export default function AdminKids() {
       if (error) throw error;
       setNewClass('');
       setMsg('تم إضافة الفصل');
+      await load();
+    });
+  }
+
+  function startEditClass(c) {
+    setEditingClassId(c.id);
+    setEditClassName(c.name);
+  }
+
+  function saveClass(e) {
+    e.preventDefault();
+    const n = editClassName.trim();
+    if (!n) return;
+    run(async () => {
+      const { error } = await supabase.from('classes').update({ name: n }).eq('id', editingClassId);
+      if (error) throw error;
+      setEditingClassId(null);
+      setMsg('تم تعديل اسم الفصل');
+      await load();
+    });
+  }
+
+  function deleteClass(c) {
+    const inClass = kids.filter((k) => k.class_id === c.id).length;
+    if (inClass > 0) {
+      setErr(`مينفعش تمسح "${c.name}" لسه فيه ${inClass} مخدوم فيه. انقلهم لفصل تاني أو امسحهم الأول.`);
+      return;
+    }
+    if (!window.confirm(`متأكد إنك عايز تمسح فصل "${c.name}"؟`)) return;
+    run(async () => {
+      const { error } = await supabase.from('classes').delete().eq('id', c.id);
+      if (error) throw error;
+      setMsg('تم مسح الفصل');
+      await load();
+    });
+  }
+
+  function startEditKid(k) {
+    setEditingKidId(k.id);
+    setEditKidName(k.full_name);
+    setEditKidClass(String(k.class_id));
+  }
+
+  function saveKid(e) {
+    e.preventDefault();
+    const n = editKidName.trim().replace(/\s+/g, ' ');
+    if (!n || !editKidClass) return setErr('اكتب الاسم واختار الفصل');
+    run(async () => {
+      const { error } = await supabase
+        .from('kids')
+        .update({ full_name: n, class_id: Number(editKidClass) })
+        .eq('id', editingKidId);
+      if (error) throw error;
+      setEditingKidId(null);
+      setMsg('تم التعديل');
+      await load();
+    });
+  }
+
+  function deleteKid(k) {
+    if (!window.confirm(`متأكد إنك عايز تمسح "${k.full_name}"؟ هيتمسح معاه كل سجل حضوره ونقاطه، ومينفعش ترجعه.`)) return;
+    run(async () => {
+      const { error } = await supabase.from('kids').delete().eq('id', k.id);
+      if (error) throw error;
+      setMsg('تم المسح');
       await load();
     });
   }
@@ -185,6 +257,47 @@ export default function AdminKids() {
             إضافة فصل
           </button>
         </form>
+
+        {classes.length > 0 && (
+          <ul className="divide-y divide-slate-100">
+            {classes.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-2 py-2">
+                {editingClassId === c.id ? (
+                  <form onSubmit={saveClass} className="flex flex-1 gap-2">
+                    <input
+                      className="flex-1 rounded-xl border border-slate-300 px-3 py-1.5"
+                      value={editClassName}
+                      onChange={(e) => setEditClassName(e.target.value)}
+                      autoFocus
+                    />
+                    <button disabled={busy} className="rounded-xl bg-indigo-700 px-3 py-1.5 text-sm font-bold text-white">
+                      حفظ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingClassId(null)}
+                      className="rounded-xl bg-slate-200 px-3 py-1.5 text-sm font-semibold"
+                    >
+                      إلغاء
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <span className="font-semibold text-slate-700">{c.name}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => startEditClass(c)} className="text-sm font-semibold text-indigo-700">
+                        تعديل
+                      </button>
+                      <button onClick={() => deleteClass(c)} className="text-sm font-semibold text-red-600">
+                        مسح
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* إضافة يدوية */}
@@ -262,14 +375,60 @@ export default function AdminKids() {
         </div>
 
         <div className="print-area grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {visibleKids.map((k) => (
-            <div key={k.id} className="kid-card flex flex-col items-center rounded-xl border border-slate-200 p-3 text-center">
-              {qrs[k.id] ? <img src={qrs[k.id]} alt="" className="h-28 w-28" /> : <div className="h-28 w-28" />}
-              <div className="mt-2 font-bold text-slate-800">{k.full_name}</div>
-              <div className="text-xs text-slate-500">{className(k.class_id)}</div>
-              <div className="mt-1 font-mono text-xs tracking-widest text-slate-400">{k.short_code}</div>
-            </div>
-          ))}
+          {visibleKids.map((k) =>
+            editingKidId === k.id ? (
+              <form
+                key={k.id}
+                onSubmit={saveKid}
+                className="no-print flex flex-col gap-2 rounded-xl border border-indigo-300 bg-indigo-50 p-3"
+              >
+                <input
+                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                  value={editKidName}
+                  onChange={(e) => setEditKidName(e.target.value)}
+                  autoFocus
+                />
+                <select
+                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                  value={editKidClass}
+                  onChange={(e) => setEditKidClass(e.target.value)}
+                >
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <button disabled={busy} className="flex-1 rounded-lg bg-indigo-700 py-1.5 text-sm font-bold text-white">
+                    حفظ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingKidId(null)}
+                    className="flex-1 rounded-lg bg-slate-200 py-1.5 text-sm font-semibold"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div key={k.id} className="kid-card flex flex-col items-center rounded-xl border border-slate-200 p-3 text-center">
+                {qrs[k.id] ? <img src={qrs[k.id]} alt="" className="h-28 w-28" /> : <div className="h-28 w-28" />}
+                <div className="mt-2 font-bold text-slate-800">{k.full_name}</div>
+                <div className="text-xs text-slate-500">{className(k.class_id)}</div>
+                <div className="mt-1 font-mono text-xs tracking-widest text-slate-400">{k.short_code}</div>
+                <div className="no-print mt-2 flex gap-3">
+                  <button onClick={() => startEditKid(k)} className="text-xs font-semibold text-indigo-700">
+                    تعديل
+                  </button>
+                  <button onClick={() => deleteKid(k)} className="text-xs font-semibold text-red-600">
+                    مسح
+                  </button>
+                </div>
+              </div>
+            )
+          )}
         </div>
         {visibleKids.length === 0 && <p className="text-slate-500">مفيش مخدومين لسه.</p>}
       </section>
