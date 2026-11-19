@@ -114,8 +114,8 @@ Deno.serve(async (req) => {
     try {
       const name = (r.name ?? '').trim().replace(/\s+/g, ' ');
       const cls = (r.cls ?? '').trim();
-      if (!name || !cls || !r.cardUrl) {
-        report.errors.push(`${label}: الاسم أو الفصل أو لينك الكارت فاضي`);
+      if (!name || !cls) {
+        report.errors.push(`${label}: الاسم أو الفصل فاضي`);
         continue;
       }
       const cid = classId.get(cls);
@@ -128,37 +128,46 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // الكارت: نفك الـ QR منه
-      const card = await fetchDrive(r.cardUrl);
-      const text = decodeQR(card.bytes);
-      if (!text) {
-        report.errors.push(`${label}: مش لاقي QR في صورة الكارت`);
-        continue;
-      }
-      const code = codeFromQR(text);
-      if (codes.has(code)) {
-        report.skipped.push(`${label}: الكارت ده مسجل قبل كده`);
-        continue;
+      // لو فيه لينك كارت (كارت جاهز من برنامج تاني زي أبناء النور): نفك الـ QR بتاعه ونستخدم كوده
+      // لو مفيش، سيبه فاضي والداتابيز هتولّد كود جديد تلقائي للمخدوم ده
+      let code: string | null = null;
+      let card: { bytes: Uint8Array; type: string } | null = null;
+      if (r.cardUrl) {
+        card = await fetchDrive(r.cardUrl);
+        const text = decodeQR(card.bytes);
+        if (!text) {
+          report.errors.push(`${label}: مش لاقي QR في صورة الكارت`);
+          continue;
+        }
+        code = codeFromQR(text);
+        if (codes.has(code)) {
+          report.skipped.push(`${label}: الكارت ده مسجل قبل كده`);
+          continue;
+        }
       }
 
       // 5) نضيف المخدوم
+      const insertRow: Record<string, unknown> = { full_name: name, class_id: cid };
+      if (code) insertRow.card_code = code;
       const { data: kid, error: kErr } = await admin
         .from('kids')
-        .insert({ full_name: name, class_id: cid, card_code: code })
+        .insert(insertRow)
         .select('id')
         .single();
       if (kErr) throw kErr;
 
-      // 6) صورة الكارت: نحفظها في Storage خاصة
-      const cardExt = card.type === 'image/png' ? 'png' : 'jpg';
-      const cardPath = `${kid.id}.${cardExt}`;
-      const { error: cErr } = await admin.storage
-        .from('kid-cards')
-        .upload(cardPath, card.bytes, { contentType: card.type, upsert: true });
-      if (cErr) {
-        report.warnings.push(`${label}: صورة الكارت ما اتحفظتش (${cErr.message})`);
-      } else {
-        await admin.from('kids').update({ card_image_path: cardPath }).eq('id', kid.id);
+      // 6) صورة الكارت (لو موجودة): نحفظها في Storage خاصة
+      if (card) {
+        const cardExt = card.type === 'image/png' ? 'png' : 'jpg';
+        const cardPath = `${kid.id}.${cardExt}`;
+        const { error: cErr } = await admin.storage
+          .from('kid-cards')
+          .upload(cardPath, card.bytes, { contentType: card.type, upsert: true });
+        if (cErr) {
+          report.warnings.push(`${label}: صورة الكارت ما اتحفظتش (${cErr.message})`);
+        } else {
+          await admin.from('kids').update({ card_image_path: cardPath }).eq('id', kid.id);
+        }
       }
 
       // 7) صورة المخدوم: نحفظها في Storage عامة
@@ -186,7 +195,7 @@ Deno.serve(async (req) => {
         if (dErr) report.warnings.push(`${label}: البيانات الخاصة ما اتحفظتش (${dErr.message})`);
       }
 
-      codes.add(code);
+      if (code) codes.add(code);
       names.add(`${cid}|${name}`);
       report.added++;
     } catch (e) {
