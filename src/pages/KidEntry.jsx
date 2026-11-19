@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import QrScanner from '../components/QrScanner.jsx';
+import { lazy, Suspense, useState } from 'react';
+
+// مكتبة قراءة QR تقيلة، بنأجل تحميلها لحد ما حد يدوس على "امسح بالكاميرا" فعلاً
+const QrScanner = lazy(() => import('../components/QrScanner.jsx'));
 
 // شاشة دخول المخدوم: مسح الـ QR بالكاميرا، أو كتابة الكود المختصر
 export default function KidEntry() {
@@ -33,7 +35,9 @@ export default function KidEntry() {
         <h1 className="text-xl font-extrabold text-indigo-900">مدارس الأحد</h1>
 
         {scanning ? (
-          <QrScanner onResult={onScanned} onClose={() => setScanning(false)} />
+          <Suspense fallback={<p className="text-slate-500">جاري فتح الكاميرا...</p>}>
+            <QrScanner onResult={onScanned} onClose={() => setScanning(false)} />
+          </Suspense>
         ) : (
           <>
             <p className="text-slate-600">امسح الـ QR اللي على كارتك، أو اكتب الكود المختصر تحته.</p>
