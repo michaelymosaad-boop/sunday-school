@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
 import { supabase } from '../lib/supabase.js';
+import { renderCardBlob, downloadBlob, safeFileName, uniqueNames } from '../lib/cardImages.js';
 
 const COL = {
   name: 'الاسم الثلاثي',
@@ -49,6 +50,9 @@ export default function AdminKids() {
   const [editKidName, setEditKidName] = useState('');
   const [editKidClass, setEditKidClass] = useState('');
 
+  const [selected, setSelected] = useState(() => new Set());
+  const [downloadProgress, setDownloadProgress] = useState('');
+
   async function load() {
     const [c, k] = await Promise.all([
       supabase.from('classes').select('id,name').order('name'),
@@ -84,6 +88,79 @@ export default function AdminKids() {
 
   const className = (id) => classes.find((c) => c.id === id)?.name ?? '';
   const visibleKids = filterClass ? kids.filter((k) => String(k.class_id) === filterClass) : kids;
+
+  const selectedKids = visibleKids.filter((k) => selected.has(k.id));
+  const allSelected = visibleKids.length > 0 && selectedKids.length === visibleKids.length;
+
+  function changeFilter(value) {
+    setFilterClass(value);
+    setSelected(new Set());
+  }
+
+  function toggleKid(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(visibleKids.map((k) => k.id)));
+  }
+
+  async function buildCards(list) {
+    const base = `${window.location.origin}${window.location.pathname}`;
+    const names = uniqueNames(
+      list.map((k) => `${safeFileName(k.full_name) || 'مخدوم'} - ${safeFileName(k.short_code)}.png`)
+    );
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      const k = list[i];
+      setDownloadProgress(`بيجهز ${i + 1} من ${list.length}...`);
+      const blob = await renderCardBlob({
+        link: `${base}?k=${encodeURIComponent(k.short_code)}`,
+        name: k.full_name,
+        className: className(k.class_id),
+        code: k.short_code,
+      });
+      out.push({ name: names[i], blob });
+    }
+    return out;
+  }
+
+  async function downloadImages() {
+    const list = selectedKids;
+    await run(async () => {
+      const cards = await buildCards(list);
+      for (let i = 0; i < cards.length; i++) {
+        setDownloadProgress(`بيحمّل ${i + 1} من ${cards.length}...`);
+        downloadBlob(cards[i].blob, cards[i].name);
+        await new Promise((r) => setTimeout(r, 350));
+      }
+      setDownloadProgress('');
+      setMsg(`اتحمّل ${cards.length} كارت كصور`);
+    });
+    setDownloadProgress('');
+  }
+
+  async function downloadZip() {
+    const list = selectedKids;
+    await run(async () => {
+      const cards = await buildCards(list);
+      setDownloadProgress('بيعمل الملف المضغوط...');
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      cards.forEach((c) => zip.file(c.name, c.blob));
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const scope = filterClass ? safeFileName(className(Number(filterClass))) : 'كل الفصول';
+      const date = new Date().toISOString().slice(0, 10);
+      downloadBlob(blob, `كروت - ${scope} - ${date}.zip`);
+      setDownloadProgress('');
+      setMsg(`اتحمّل ملف مضغوط فيه ${cards.length} كارت`);
+    });
+    setDownloadProgress('');
+  }
 
   async function run(fn) {
     setBusy(true);
@@ -359,7 +436,8 @@ export default function AdminKids() {
             <select
               className="rounded-xl border border-slate-300 px-3 py-2"
               value={filterClass}
-              onChange={(e) => setFilterClass(e.target.value)}
+              onChange={(e) => changeFilter(e.target.value)}
+              aria-label="فلتر الفصل"
             >
               <option value="">كل الفصول</option>
               {classes.map((c) => (
@@ -373,6 +451,44 @@ export default function AdminKids() {
             </button>
           </div>
         </div>
+
+        {visibleKids.length > 0 && (
+          <div className="no-print flex flex-wrap items-center gap-3 rounded-xl bg-indigo-50 p-3">
+            <label className="flex cursor-pointer items-center gap-2 font-semibold text-indigo-900">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-indigo-700"
+                checked={allSelected}
+                onChange={toggleAll}
+              />
+              اختار الكل
+            </label>
+            <span className="text-sm text-slate-600" aria-live="polite">
+              مختار {selectedKids.length} من {visibleKids.length}
+            </span>
+            <div className="ms-auto flex flex-wrap gap-2">
+              <button
+                onClick={downloadImages}
+                disabled={busy || selectedKids.length === 0}
+                className="rounded-xl bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                تحميل كصور
+              </button>
+              <button
+                onClick={downloadZip}
+                disabled={busy || selectedKids.length === 0}
+                className="rounded-xl border border-indigo-700 bg-white px-4 py-2 text-sm font-bold text-indigo-700 disabled:opacity-50"
+              >
+                تحميل ملف مضغوط
+              </button>
+            </div>
+            {downloadProgress && (
+              <p className="w-full text-sm font-semibold text-indigo-700" aria-live="polite">
+                {downloadProgress}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="print-area grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {visibleKids.map((k) =>
@@ -413,7 +529,19 @@ export default function AdminKids() {
                 </div>
               </form>
             ) : (
-              <div key={k.id} className="kid-card flex flex-col items-center rounded-xl border border-slate-200 p-3 text-center">
+              <div
+                key={k.id}
+                className={`kid-card relative flex flex-col items-center rounded-xl border p-3 text-center ${
+                  selected.has(k.id) ? 'border-indigo-500 ring-2 ring-indigo-200 print:border-slate-200 print:ring-0' : 'border-slate-200'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="no-print absolute end-2 top-2 h-4 w-4 cursor-pointer accent-indigo-700"
+                  checked={selected.has(k.id)}
+                  onChange={() => toggleKid(k.id)}
+                  aria-label={`اختيار ${k.full_name}`}
+                />
                 {qrs[k.id] ? <img src={qrs[k.id]} alt="" className="h-28 w-28" /> : <div className="h-28 w-28" />}
                 <div className="mt-2 font-bold text-slate-800">{k.full_name}</div>
                 <div className="text-xs text-slate-500">{className(k.class_id)}</div>
