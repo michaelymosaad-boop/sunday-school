@@ -50,6 +50,10 @@ export default function AdminKids() {
   const [editKidName, setEditKidName] = useState('');
   const [editKidClass, setEditKidClass] = useState('');
 
+  // حذف من القائمة
+  const [deleteKidId, setDeleteKidId] = useState('');
+  const [deleteClassId, setDeleteClassId] = useState('');
+
   const [selected, setSelected] = useState(() => new Set());
   const [downloadProgress, setDownloadProgress] = useState('');
 
@@ -255,9 +259,20 @@ export default function AdminKids() {
       setEditingKidId(null);
       setEditKidName('');
       setEditKidClass('');
+      setDeleteKidId('');
       setMsg('تم المسح');
       await load();
     });
+  }
+
+  function deleteKidById() {
+    const k = kids.find((x) => String(x.id) === deleteKidId);
+    deleteKid(k);
+  }
+
+  function deleteClassById() {
+    const c = classes.find((x) => String(x.id) === deleteClassId);
+    deleteClass(c);
   }
 
   function addKid(e) {
@@ -372,9 +387,6 @@ export default function AdminKids() {
                       <button onClick={() => startEditClass(c)} className="text-sm font-semibold text-indigo-700">
                         تعديل
                       </button>
-                      <button onClick={() => deleteClass(c)} className="text-sm font-semibold text-red-600">
-                        مسح
-                      </button>
                     </div>
                   </>
                 )}
@@ -382,6 +394,61 @@ export default function AdminKids() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* حذف مخدوم أو فصل */}
+      <section className="space-y-4 rounded-2xl bg-white p-5 shadow">
+        <h2 className="text-lg font-extrabold text-indigo-900">حذف</h2>
+
+        {/* حذف مخدوم */}
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold text-slate-600">حذف مخدوم</label>
+          <div className="flex gap-2">
+            <select
+              className="flex-1 rounded-xl border border-slate-300 px-3 py-2"
+              value={deleteKidId}
+              onChange={(e) => setDeleteKidId(e.target.value)}
+            >
+              <option value="">— اختار المخدوم —</option>
+              {kids.map((k) => (
+                <option key={k.id} value={String(k.id)}>
+                  {k.full_name} ({className(k.class_id)})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={deleteKidById}
+              disabled={busy || !deleteKidId}
+              className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-40"
+            >
+              حذف
+            </button>
+          </div>
+        </div>
+
+        {/* حذف فصل */}
+        <div className="space-y-2">
+          <label className="block text-sm font-semibold text-slate-600">حذف فصل (لازم يكون فاضي من المخدومين)</label>
+          <div className="flex gap-2">
+            <select
+              className="flex-1 rounded-xl border border-slate-300 px-3 py-2"
+              value={deleteClassId}
+              onChange={(e) => setDeleteClassId(e.target.value)}
+            >
+              <option value="">— اختار الفصل —</option>
+              {classes.map((c) => (
+                <option key={c.id} value={String(c.id)}>{c.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={deleteClassById}
+              disabled={busy || !deleteClassId}
+              className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-40"
+            >
+              حذف
+            </button>
+          </div>
+        </div>
       </section>
 
       {/* إضافة يدوية */}
@@ -556,9 +623,6 @@ export default function AdminKids() {
                 <div className="no-print mt-2 flex gap-3">
                   <button onClick={() => startEditKid(k)} className="text-xs font-semibold text-indigo-700">
                     تعديل
-                  </button>
-                  <button onClick={() => deleteKid(k)} className="text-xs font-semibold text-red-600">
-                    مسح
                   </button>
                 </div>
               </div>
