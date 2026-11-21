@@ -394,41 +394,10 @@ export default function AdminKids() {
             ))}
           </ul>
         )}
-      </section>
 
-      {/* حذف مخدوم أو فصل */}
-      <section className="space-y-4 rounded-2xl bg-white p-5 shadow">
-        <h2 className="text-lg font-extrabold text-indigo-900">حذف</h2>
-
-        {/* حذف مخدوم */}
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold text-slate-600">حذف مخدوم</label>
-          <div className="flex gap-2">
-            <select
-              className="flex-1 rounded-xl border border-slate-300 px-3 py-2"
-              value={deleteKidId}
-              onChange={(e) => setDeleteKidId(e.target.value)}
-            >
-              <option value="">— اختار المخدوم —</option>
-              {kids.map((k) => (
-                <option key={k.id} value={String(k.id)}>
-                  {k.full_name} ({className(k.class_id)})
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={deleteKidById}
-              disabled={busy || !deleteKidId}
-              className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-40"
-            >
-              حذف
-            </button>
-          </div>
-        </div>
-
-        {/* حذف فصل */}
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold text-slate-600">حذف فصل (لازم يكون فاضي من المخدومين)</label>
+        {/* حذف فصل بالقائمة */}
+        <div className="border-t border-slate-100 pt-3">
+          <p className="mb-2 text-sm font-semibold text-slate-500">حذف فصل (لازم يكون فاضي من المخدومين)</p>
           <div className="flex gap-2">
             <select
               className="flex-1 rounded-xl border border-slate-300 px-3 py-2"
@@ -441,6 +410,7 @@ export default function AdminKids() {
               ))}
             </select>
             <button
+              type="button"
               onClick={deleteClassById}
               disabled={busy || !deleteClassId}
               className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-40"
@@ -450,6 +420,7 @@ export default function AdminKids() {
           </div>
         </div>
       </section>
+
 
       {/* إضافة يدوية */}
       <section className="space-y-3 rounded-2xl bg-white p-5 shadow">
@@ -623,6 +594,9 @@ export default function AdminKids() {
                 <div className="no-print mt-2 flex gap-3">
                   <button onClick={() => startEditKid(k)} className="text-xs font-semibold text-indigo-700">
                     تعديل
+                  </button>
+                  <button onClick={() => deleteKid(k)} className="text-xs font-semibold text-red-600">
+                    مسح
                   </button>
                 </div>
               </div>
