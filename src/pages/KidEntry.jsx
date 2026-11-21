@@ -126,12 +126,13 @@ function StaffLogin({ onCancel, onDone }) {
 
         <form onSubmit={submit} className="space-y-3">
           <input
-            type="email"
+            type="text"
             className="w-full rounded-xl border border-slate-300 px-3 py-3"
             placeholder="البريد الإلكتروني"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="username"
+            inputMode="email"
             required
             dir="ltr"
           />
