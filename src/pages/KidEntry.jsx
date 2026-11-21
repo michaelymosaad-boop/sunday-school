@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
+import { supabase } from '../lib/supabase.js';
 
 // مكتبة قراءة QR تقيلة، بنأجل تحميلها لحد ما حد يدوس على "امسح بالكاميرا" فعلاً
 const QrScanner = lazy(() => import('../components/QrScanner.jsx'));
@@ -96,8 +97,6 @@ export default function KidEntry({ onStaff }) {
 }
 
 /* ——— فورم الخادم/الأدمن ——— */
-import { supabase } from '../lib/supabase.js';
-
 function StaffLogin({ onCancel, onDone }) {
   const [email, setEmail]   = useState('');
   const [pass, setPass]     = useState('');
