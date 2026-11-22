@@ -43,9 +43,6 @@ export default function AdminKids() {
   const [classId, setClassId] = useState('');
   const [filterClass, setFilterClass] = useState('');
 
-  const [editingClassId, setEditingClassId] = useState(null);
-  const [editClassName, setEditClassName] = useState('');
-
   const [editingKidId, setEditingKidId] = useState(null);
   const [editKidName, setEditKidName] = useState('');
   const [editKidClass, setEditKidClass] = useState('');
@@ -193,24 +190,6 @@ export default function AdminKids() {
     });
   }
 
-  function startEditClass(c) {
-    setEditingClassId(c.id);
-    setEditClassName(c.name);
-  }
-
-  function saveClass(e) {
-    e.preventDefault();
-    const n = editClassName.trim();
-    if (!n) return;
-    run(async () => {
-      const { error } = await supabase.from('classes').update({ name: n }).eq('id', editingClassId);
-      if (error) throw error;
-      setEditingClassId(null);
-      setMsg('تم تعديل اسم الفصل');
-      await load();
-    });
-  }
-
   function deleteClass(c) {
     if (!c) return;
     const inClass = kids.filter((k) => k.class_id === c.id).length;
@@ -347,44 +326,6 @@ export default function AdminKids() {
             إضافة فصل
           </button>
         </form>
-
-        {classes.length > 0 && (
-          <ul className="divide-y divide-slate-100">
-            {classes.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-2 py-2">
-                {editingClassId === c.id ? (
-                  <form onSubmit={saveClass} className="flex flex-1 gap-2">
-                    <input
-                      className="flex-1 rounded-xl border border-slate-300 px-3 py-1.5"
-                      value={editClassName}
-                      onChange={(e) => setEditClassName(e.target.value)}
-                      autoFocus
-                    />
-                    <button disabled={busy} className="rounded-xl bg-indigo-700 px-3 py-1.5 text-sm font-bold text-white">
-                      حفظ
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditingClassId(null)}
-                      className="rounded-xl bg-slate-200 px-3 py-1.5 text-sm font-semibold"
-                    >
-                      إلغاء
-                    </button>
-                  </form>
-                ) : (
-                  <>
-                    <span className="font-semibold text-slate-700">{c.name}</span>
-                    <div className="flex gap-2">
-                      <button onClick={() => startEditClass(c)} className="text-sm font-semibold text-indigo-700">
-                        تعديل
-                      </button>
-                    </div>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
 
         {/* حذف فصل بالقائمة */}
         <div className="border-t border-slate-100 pt-3">
