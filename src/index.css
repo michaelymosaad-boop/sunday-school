@@ -6,6 +6,11 @@ body {
   @apply bg-slate-100 text-slate-900 antialiased;
 }
 
+/* إخفاء خيار تعديل الفصل بجانب اسمه فقط؛ قائمة الحذف وزر الحذف يظلان كما هما */
+.space-y-6 > section:first-of-type > ul.divide-y > li > div.flex.gap-2 {
+  display: none;
+}
+
 /* طباعة الكروت: بتطبع منطقة الكروت بس */
 @media print {
   body * { visibility: hidden; }
