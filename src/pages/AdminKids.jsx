@@ -50,9 +50,10 @@ export default function AdminKids() {
   const [editKidName, setEditKidName] = useState('');
   const [editKidClass, setEditKidClass] = useState('');
 
-  // حذف من القائمة
-  const [deleteKidId, setDeleteKidId] = useState('');
+  // حذف الفصل بالقائمة
   const [deleteClassId, setDeleteClassId] = useState('');
+  // تأكيد حذف مخدوم (id لما بيدوس مسح، بيظهر زرار تأكيد)
+  const [confirmDeleteKidId, setConfirmDeleteKidId] = useState(null);
 
   const [selected, setSelected] = useState(() => new Set());
   const [downloadProgress, setDownloadProgress] = useState('');
@@ -214,16 +215,14 @@ export default function AdminKids() {
     if (!c) return;
     const inClass = kids.filter((k) => k.class_id === c.id).length;
     if (inClass > 0) {
-      setErr(`مينفعش تمسح "${c.name}" لسه فيه ${inClass} مخدوم فيه. انقلهم لفصل تاني أو امسحهم الأول.`);
+      setErr(`مينفعش تمسح "${c.name}" — لسه فيه ${inClass} مخدوم فيه. انقلهم لفصل تاني أو امسحهم الأول.`);
       return;
     }
-    if (!window.confirm(`متأكد إنك عايز تمسح فصل "${c.name}"؟`)) return;
     run(async () => {
       const { error } = await supabase.from('classes').delete().eq('id', c.id);
       if (error) throw error;
-      setEditingClassId(null);
-      setEditClassName('');
-      setMsg('تم مسح الفصل');
+      setDeleteClassId('');
+      setMsg(`تم مسح فصل "${c.name}"`);
       await load();
     });
   }
@@ -252,22 +251,14 @@ export default function AdminKids() {
 
   function deleteKid(k) {
     if (!k) return;
-    if (!window.confirm(`متأكد إنك عايز تمسح "${k.full_name}"؟ هيتمسح معاه كل سجل حضوره ونقاطه، ومينفعش ترجعه.`)) return;
     run(async () => {
       const { error } = await supabase.from('kids').delete().eq('id', k.id);
       if (error) throw error;
       setEditingKidId(null);
-      setEditKidName('');
-      setEditKidClass('');
-      setDeleteKidId('');
-      setMsg('تم المسح');
+      setConfirmDeleteKidId(null);
+      setMsg(`تم مسح "${k.full_name}"`);
       await load();
     });
-  }
-
-  function deleteKidById() {
-    const k = kids.find((x) => String(x.id) === deleteKidId);
-    deleteKid(k);
   }
 
   function deleteClassById() {
@@ -592,12 +583,32 @@ export default function AdminKids() {
                 <div className="text-xs text-slate-500">{className(k.class_id)}</div>
                 <div className="mt-1 font-mono text-xs tracking-widest text-slate-400">{k.short_code}</div>
                 <div className="no-print mt-2 flex gap-3">
-                  <button onClick={() => startEditKid(k)} className="text-xs font-semibold text-indigo-700">
-                    تعديل
-                  </button>
-                  <button onClick={() => deleteKid(k)} className="text-xs font-semibold text-red-600">
-                    مسح
-                  </button>
+                  {confirmDeleteKidId === k.id ? (
+                    <>
+                      <button
+                        onClick={() => deleteKid(k)}
+                        disabled={busy}
+                        className="text-xs font-bold text-red-600"
+                      >
+                        تأكيد المسح
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteKidId(null)}
+                        className="text-xs font-semibold text-slate-500"
+                      >
+                        إلغاء
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEditKid(k)} className="text-xs font-semibold text-indigo-700">
+                        تعديل
+                      </button>
+                      <button onClick={() => setConfirmDeleteKidId(k.id)} className="text-xs font-semibold text-red-600">
+                        مسح
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )
