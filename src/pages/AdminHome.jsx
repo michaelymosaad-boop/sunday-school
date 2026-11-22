@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 import AdminKids from './AdminKids.jsx';
+import AdminEvents from './AdminEvents.jsx';
 
 export default function AdminHome({ profile }) {
   const [tab, setTab] = useState('home');
@@ -31,9 +32,10 @@ export default function AdminHome({ profile }) {
         </button>
       </header>
 
-      <nav className="no-print flex gap-2">
-        <Tab active={tab === 'home'} onClick={() => setTab('home')}>الرئيسية</Tab>
-        <Tab active={tab === 'kids'} onClick={() => setTab('kids')}>المخدومين والفصول</Tab>
+      <nav className="no-print flex flex-wrap gap-2">
+        <Tab active={tab === 'home'}   onClick={() => setTab('home')}>الرئيسية</Tab>
+        <Tab active={tab === 'kids'}   onClick={() => setTab('kids')}>المخدومين والفصول</Tab>
+        <Tab active={tab === 'events'} onClick={() => setTab('events')}>الفعاليات</Tab>
       </nav>
 
       {tab === 'home' && (
@@ -41,13 +43,14 @@ export default function AdminHome({ profile }) {
           <p className="text-slate-600">أهلاً {profile.display_name}. الاتصال بقاعدة البيانات شغّال.</p>
           <div className="grid grid-cols-3 gap-4">
             <Stat label="المخدومين" value={counts.kids} />
-            <Stat label="الفصول" value={counts.classes} />
+            <Stat label="الفصول"    value={counts.classes} />
             <Stat label="الفعاليات" value={counts.events} />
           </div>
         </>
       )}
 
-      {tab === 'kids' && <AdminKids />}
+      {tab === 'kids'   && <AdminKids />}
+      {tab === 'events' && <AdminEvents />}
     </div>
   );
 }
