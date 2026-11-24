@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 import AdminKids from './AdminKids.jsx';
 import AdminEvents from './AdminEvents.jsx';
+import AdminServants from './AdminServants.jsx';
 
 export default function AdminHome({ profile }) {
   const [tab, setTab] = useState('home');
@@ -36,6 +37,7 @@ export default function AdminHome({ profile }) {
         <Tab active={tab === 'home'}   onClick={() => setTab('home')}>الرئيسية</Tab>
         <Tab active={tab === 'kids'}   onClick={() => setTab('kids')}>المخدومين والفصول</Tab>
         <Tab active={tab === 'events'} onClick={() => setTab('events')}>الفعاليات</Tab>
+        <Tab active={tab === 'servants'} onClick={() => setTab('servants')}>الخدام</Tab>
       </nav>
 
       {tab === 'home' && (
@@ -51,6 +53,7 @@ export default function AdminHome({ profile }) {
 
       {tab === 'kids'   && <AdminKids />}
       {tab === 'events' && <AdminEvents />}
+      {tab === 'servants' && <AdminServants />}
     </div>
   );
 }
