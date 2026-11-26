@@ -13,7 +13,6 @@ export default function AdminServants() {
   // فورم إضافة خادم جديد
   const [showForm,     setShowForm]     = useState(false);
   const [loginName,    setLoginName]    = useState('');
-  const [displayName,  setDisplayName]  = useState('');
   const [password,     setPassword]     = useState('');
   const [selectedEvts, setSelectedEvts] = useState(new Set()); // event ids المختارة
 
@@ -56,7 +55,7 @@ export default function AdminServants() {
   async function addServant(e) {
     e.preventDefault();
     const login   = loginName.trim();
-    const display = displayName.trim();
+    const display = login; // اسم واحد بيُستخدم للدخول وللعرض
     const pass    = password.trim();
     if (!login || !display || !pass) return setErr('كمّل كل البيانات');
     if (pass.length < 8) return setErr('كلمة السر لازم تكون 8 حروف على الأقل');
@@ -75,7 +74,7 @@ export default function AdminServants() {
       if (fnData?.error) throw new Error(fnData.error);
 
       setMsg(`تم إنشاء حساب "${display}"`);
-      setLoginName(''); setDisplayName(''); setPassword(''); setSelectedEvts(new Set());
+      setLoginName(''); setPassword(''); setSelectedEvts(new Set());
       setShowForm(false);
       await load();
     });
@@ -159,15 +158,17 @@ export default function AdminServants() {
 
         {/* ——— فورم الإضافة ——— */}
         {showForm && (
-          <form onSubmit={addServant} className="space-y-4 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+          <form onSubmit={addServant} autoComplete="off" className="space-y-4 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
             <h3 className="font-bold text-indigo-800">خادم جديد</h3>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block space-y-1">
-                <span className="text-sm font-semibold text-slate-600">اسم الدخول (رباعي)</span>
+                <span className="text-sm font-semibold text-slate-600">اسم الخادم (ده اللي هيدخل بيه)</span>
                 <input
+                  name="servant-name"
+                  autoComplete="off"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2"
-                  placeholder="مثال: مرقس بطرس حنا إبراهيم"
+                  placeholder="مثال: مرقس بطرس حنا"
                   value={loginName}
                   onChange={(e) => setLoginName(e.target.value)}
                   required
@@ -175,20 +176,11 @@ export default function AdminServants() {
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-sm font-semibold text-slate-600">الاسم اللي بيظهر (ثلاثي)</span>
-                <input
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2"
-                  placeholder="مثال: مرقس بطرس حنا"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  required
-                  dir="rtl"
-                />
-              </label>
-              <label className="block space-y-1 sm:col-span-2">
                 <span className="text-sm font-semibold text-slate-600">كلمة السر (8 حروف على الأقل)</span>
                 <input
                   type="password"
+                  name="servant-password"
+                  autoComplete="new-password"
                   className="w-full rounded-xl border border-slate-300 px-3 py-2"
                   placeholder="••••••••"
                   value={password}
