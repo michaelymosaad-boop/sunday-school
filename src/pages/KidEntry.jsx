@@ -108,11 +108,19 @@ function StaffLogin({ onCancel, onDone }) {
     setErr('');
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      // لو اللي اتكتب مش إيميل (اسم خادم) نحوّله للإيميل المرتبط بيه
+      let loginEmail = email.trim();
+      if (!loginEmail.includes('@')) {
+        const { data: resolved, error: lookupErr } = await supabase.rpc('resolve_login', { p_login: loginEmail });
+        if (lookupErr) throw lookupErr;
+        if (!resolved) throw new Error('Invalid login credentials');
+        loginEmail = resolved;
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: pass });
       if (error) throw error;
       if (onDone) onDone();
     } catch (e) {
-      setErr(e.message === 'Invalid login credentials' ? 'البريد أو كلمة السر غلط' : e.message);
+      setErr(e.message === 'Invalid login credentials' ? 'الاسم أو كلمة السر غلط' : e.message);
     } finally {
       setLoading(false);
     }
@@ -127,13 +135,12 @@ function StaffLogin({ onCancel, onDone }) {
           <input
             type="text"
             className="w-full rounded-xl border border-slate-300 px-3 py-3"
-            placeholder="البريد الإلكتروني"
+            placeholder="الاسم (للخدام) أو البريد (للأدمن)"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="username"
-            inputMode="email"
             required
-            dir="ltr"
+            dir="auto"
           />
           <input
             type="password"
