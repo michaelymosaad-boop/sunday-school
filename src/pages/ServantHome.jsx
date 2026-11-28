@@ -66,7 +66,7 @@ export default function ServantHome({ profile }) {
 
           <nav className="flex gap-2">
             <Tab active={tab === 'camera'} onClick={() => setTab('camera')}>📷 مسح بالكاميرا</Tab>
-            <Tab active={tab === 'list'} onClick={() => setTab('list')}>من القائمة</Tab>
+            <Tab active={tab === 'list'} onClick={() => setTab('list')}>بحث بالاسم</Tab>
           </nav>
 
           {tab === 'camera' && <CameraTab eventId={selEvent} />}
@@ -164,44 +164,61 @@ function CameraTab({ eventId }) {
   );
 }
 
-/* ——— تسجيل يدوي من القائمة (لو الكارت ضاع) ——— */
+// توحيد الكتابة العربية (ة/ه، ى/ي، أ/إ/آ/ا، التشكيل) عشان البحث يلاقي الاسم بأي شكل
+function norm(str) {
+  return String(str ?? '')
+    .replace(/[\u064B-\u0652\u0640]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* ——— تسجيل يدوي بالبحث بالاسم (لو الكارت ضاع) ——— */
 function ListTab({ eventId }) {
   const [classes, setClasses] = useState([]);
   const [kids, setKids] = useState([]);
+  const [search, setSearch] = useState('');
   const [selClass, setSelClass] = useState('');
-  const [selKid, setSelKid] = useState('');
+  const [selKid, setSelKid] = useState(null);
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // الـ 120 مخدوم تقريبًا بنحمّلهم مرة واحدة والبحث بيتم في المتصفح (لحظي)
   useEffect(() => {
     supabase.from('classes').select('id,name').order('name').then(({ data }) => setClasses(data ?? []));
-  }, []);
-
-  useEffect(() => {
-    setSelKid('');
-    if (!selClass) return setKids([]);
     supabase
       .from('kids')
-      .select('id,full_name,card_code,short_code')
-      .eq('class_id', selClass)
+      .select('id,full_name,card_code,short_code,class_id')
       .eq('is_active', true)
       .order('full_name')
       .then(({ data }) => setKids(data ?? []));
-  }, [selClass]);
+  }, []);
+
+  const className = (id) => classes.find((c) => c.id === id)?.name ?? '';
+  const q = norm(search);
+  const results = kids
+    .filter((k) => !selClass || String(k.class_id) === selClass)
+    .filter((k) => !q || norm(k.full_name).includes(q))
+    .slice(0, 30);
 
   async function record() {
-    const kid = kids.find((k) => String(k.id) === selKid);
-    if (!kid) return;
+    if (!selKid) return;
     setLoading(true);
     setMsg(null);
     try {
       const { data, error } = await supabase.rpc('record_scan', {
-        p_card_code: kid.card_code || kid.short_code,
+        p_card_code: selKid.card_code || selKid.short_code,
         p_event_id: Number(eventId),
       });
       if (error) throw error;
-      setMsg(describe(data, kid.full_name));
-      if (data?.type === 'ok') setSelKid('');
+      setMsg(describe(data, selKid.full_name));
+      if (data?.type === 'ok') {
+        setSelKid(null);
+        setSearch('');
+      }
     } catch (e) {
       setMsg({ ok: false, text: friendlyError(e) });
     } finally {
@@ -212,33 +229,48 @@ function ListTab({ eventId }) {
   return (
     <div className="space-y-4 rounded-2xl bg-white p-5 shadow">
       <label className="block space-y-1">
-        <span className="text-sm font-semibold text-slate-600">الفصل</span>
+        <span className="text-sm font-semibold text-slate-600">ابحث بالاسم</span>
+        <input
+          type="search"
+          className="w-full rounded-xl border border-slate-300 px-3 py-2"
+          placeholder="اكتب أي جزء من الاسم..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setSelKid(null); setMsg(null); }}
+          autoComplete="off"
+        />
+      </label>
+
+      <label className="block space-y-1">
+        <span className="text-sm font-semibold text-slate-600">الفصل (اختياري)</span>
         <select
           className="w-full rounded-xl border border-slate-300 px-3 py-2"
           value={selClass}
-          onChange={(e) => setSelClass(e.target.value)}
+          onChange={(e) => { setSelClass(e.target.value); setSelKid(null); }}
         >
-          <option value="">— اختار الفصل —</option>
+          <option value="">كل الفصول</option>
           {classes.map((c) => (
             <option key={c.id} value={String(c.id)}>{c.name}</option>
           ))}
         </select>
       </label>
 
-      <label className="block space-y-1">
-        <span className="text-sm font-semibold text-slate-600">المخدوم</span>
-        <select
-          className="w-full rounded-xl border border-slate-300 px-3 py-2"
-          value={selKid}
-          onChange={(e) => setSelKid(e.target.value)}
-          disabled={!selClass}
-        >
-          <option value="">{selClass ? '— اختار المخدوم —' : '— اختار الفصل الأول —'}</option>
-          {kids.map((k) => (
-            <option key={k.id} value={String(k.id)}>{k.full_name}</option>
-          ))}
-        </select>
-      </label>
+      <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
+        {results.length === 0 && <li className="p-3 text-center text-sm text-slate-400">مفيش نتايج</li>}
+        {results.map((k) => (
+          <li key={k.id}>
+            <button
+              type="button"
+              onClick={() => { setSelKid(k); setMsg(null); }}
+              className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-start ${
+                selKid?.id === k.id ? 'bg-indigo-50 font-bold text-indigo-800' : 'text-slate-700'
+              }`}
+            >
+              <span>{k.full_name}</span>
+              <span className="shrink-0 text-xs text-slate-400">{className(k.class_id)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
 
       {msg && (
         <p className={`rounded-xl p-3 text-sm font-semibold ${msg.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
@@ -251,7 +283,7 @@ function ListTab({ eventId }) {
         disabled={loading || !selKid}
         className="w-full rounded-xl bg-indigo-700 py-3 font-bold text-white disabled:opacity-40"
       >
-        {loading ? '...' : '✓ تسجيل الحضور'}
+        {loading ? '...' : selKid ? `✓ تسجيل حضور ${selKid.full_name}` : 'اختار المخدوم من النتايج'}
       </button>
     </div>
   );
