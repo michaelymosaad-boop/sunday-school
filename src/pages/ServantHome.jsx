@@ -316,6 +316,7 @@ function SummaryTab({ event, profile, ended }) {
   const [classes, setClasses] = useState([]);
   const [mine, setMine] = useState(true);
   const [confirmId, setConfirmId] = useState(null);
+  const [openClass, setOpenClass] = useState(null); // فصل واحد بس مفتوح في المرة
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -420,17 +421,27 @@ function SummaryTab({ event, profile, ended }) {
           const list = missing.filter((k) => k.class_id === c.id);
           if (list.length === 0) return null;
           return (
-            <details key={c.id} className="rounded-2xl bg-white shadow">
-              <summary className="flex cursor-pointer items-center justify-between px-4 py-3 font-bold text-indigo-800">
+            <div key={c.id} className="rounded-2xl bg-white shadow">
+              <button
+                type="button"
+                onClick={() => setOpenClass(openClass === c.id ? null : c.id)}
+                className="flex w-full items-center justify-between px-4 py-3 font-bold text-indigo-800"
+                aria-expanded={openClass === c.id}
+              >
                 <span>{c.name}</span>
-                <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-sm text-red-600">{list.length} غايب</span>
-              </summary>
-              <ul className="grid grid-cols-1 gap-1 border-t border-slate-100 p-3 sm:grid-cols-2">
-                {list.map((k) => (
-                  <li key={k.id} className="rounded-lg bg-slate-50 px-3 py-1.5 text-sm text-slate-700">{k.full_name}</li>
-                ))}
-              </ul>
-            </details>
+                <span className="flex items-center gap-2">
+                  <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-sm text-red-600">{list.length} غايب</span>
+                  <span className="text-slate-400">{openClass === c.id ? '▲' : '▼'}</span>
+                </span>
+              </button>
+              {openClass === c.id && (
+                <ul className="grid grid-cols-1 gap-1 border-t border-slate-100 p-3 sm:grid-cols-2">
+                  {list.map((k) => (
+                    <li key={k.id} className="rounded-lg bg-slate-50 px-3 py-1.5 text-sm text-slate-700">{k.full_name}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
           );
         })}
       </section>
