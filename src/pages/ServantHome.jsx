@@ -416,22 +416,27 @@ function SummaryTab({ event, profile, ended }) {
         })}
       </ul>
 
-      <details className="rounded-2xl bg-white p-4 shadow">
-        <summary className="cursor-pointer font-bold text-slate-700">لسه ماحضروش ({missing.length})</summary>
-        <div className="mt-3 space-y-3">
-          {classes.map((c) => {
-            const list = missing.filter((k) => k.class_id === c.id);
-            if (list.length === 0) return null;
-            return (
-              <div key={c.id}>
-                <p className="text-sm font-bold text-indigo-800">{c.name} ({list.length})</p>
-                <p className="text-sm text-slate-600">{list.map((k) => k.full_name).join(' ، ')}</p>
-              </div>
-            );
-          })}
-          {missing.length === 0 && <p className="text-sm text-green-700">كله حضر 🎉</p>}
-        </div>
-      </details>
+      <section className="space-y-2">
+        <h3 className="font-bold text-slate-700">لسه ماحضروش ({missing.length})</h3>
+        {missing.length === 0 && <p className="rounded-2xl bg-green-50 p-4 text-center font-semibold text-green-700">كله حضر 🎉</p>}
+        {classes.map((c) => {
+          const list = missing.filter((k) => k.class_id === c.id);
+          if (list.length === 0) return null;
+          return (
+            <details key={c.id} className="rounded-2xl bg-white shadow">
+              <summary className="flex cursor-pointer items-center justify-between px-4 py-3 font-bold text-indigo-800">
+                <span>{c.name}</span>
+                <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-sm text-red-600">{list.length} غايب</span>
+              </summary>
+              <ul className="grid grid-cols-1 gap-1 border-t border-slate-100 p-3 sm:grid-cols-2">
+                {list.map((k) => (
+                  <li key={k.id} className="rounded-lg bg-slate-50 px-3 py-1.5 text-sm text-slate-700">{k.full_name}</li>
+                ))}
+              </ul>
+            </details>
+          );
+        })}
+      </section>
     </div>
   );
 }
