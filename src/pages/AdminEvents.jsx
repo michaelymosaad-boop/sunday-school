@@ -20,13 +20,14 @@ export default function AdminEvents() {
   // فورم الإضافة
   const [newName, setNewName]       = useState('');
   const [newTime, setNewTime]       = useState('09:00');
+  const [newEnd, setNewEnd]         = useState('11:00');
   const [newTiers, setNewTiers]     = useState(DEFAULT_TIERS);
   const [showForm, setShowForm]     = useState(false);
 
   async function load() {
     const { data, error } = await supabase
       .from('events')
-      .select('id,name,start_time,is_active,event_tiers(id,position,up_to_minutes,points)')
+      .select('id,name,start_time,end_time,is_active,event_tiers(id,position,up_to_minutes,points)')
       .order('id', { ascending: false });
     if (error) throw error;
     // رتّب الـ tiers داخل كل فعالية
@@ -52,13 +53,14 @@ export default function AdminEvents() {
     e.preventDefault();
     const name = newName.trim();
     if (!name) return setErr('اكتب اسم الفعالية');
+    if (newEnd <= newTime) return setErr('وقت النهاية لازم يكون بعد وقت البداية');
     if (newTiers.some((t) => t.points < 0)) return setErr('النقاط لازم تكون صفر أو أكتر');
 
     run(async () => {
       // 1) اضف الفعالية
       const { data: ev, error: evErr } = await supabase
         .from('events')
-        .insert({ name, start_time: newTime })
+        .insert({ name, start_time: newTime, end_time: newEnd })
         .select('id')
         .single();
       if (evErr) throw evErr;
@@ -74,7 +76,7 @@ export default function AdminEvents() {
       if (tierErr) throw tierErr;
 
       setMsg(`تم إضافة فعالية "${name}"`);
-      setNewName(''); setNewTime('09:00'); setNewTiers(DEFAULT_TIERS);
+      setNewName(''); setNewTime('09:00'); setNewEnd('11:00'); setNewTiers(DEFAULT_TIERS);
       setShowForm(false);
       await load();
     });
@@ -89,6 +91,17 @@ export default function AdminEvents() {
         .eq('id', ev.id);
       if (error) throw error;
       setMsg(ev.is_active ? `تم إيقاف "${ev.name}"` : `تم تفعيل "${ev.name}"`);
+      await load();
+    });
+  }
+
+  // ——— تعديل وقت النهاية ———
+  function saveEnd(ev, value) {
+    if (value && value <= ev.start_time.slice(0, 5)) return setErr('وقت النهاية لازم يكون بعد وقت البداية');
+    run(async () => {
+      const { error } = await supabase.from('events').update({ end_time: value || null }).eq('id', ev.id);
+      if (error) throw error;
+      setMsg(`تم تعديل وقت نهاية "${ev.name}"`);
       await load();
     });
   }
@@ -144,6 +157,16 @@ export default function AdminEvents() {
                   className="w-full rounded-xl border border-slate-300 px-3 py-2"
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
+                  required
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-sm font-semibold text-slate-600">وقت النهاية (بعده مفيش تسجيل)</span>
+                <input
+                  type="time"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                  value={newEnd}
+                  onChange={(e) => setNewEnd(e.target.value)}
                   required
                 />
               </label>
@@ -220,6 +243,8 @@ export default function AdminEvents() {
               <p className="text-sm text-slate-500">
                 وقت البداية: <span className="font-mono">{ev.start_time?.slice(0, 5)}</span>
                 {' · '}
+                النهاية: <EndTime ev={ev} busy={busy} onSave={saveEnd} />
+                {' · '}
                 <span className={ev.is_active ? 'text-emerald-600 font-semibold' : 'text-slate-400'}>
                   {ev.is_active ? '🟢 نشطة' : '⚪ موقوفة'}
                 </span>
@@ -277,7 +302,7 @@ export default function AdminEvents() {
                   <span className="font-bold text-indigo-700">{t.points} نقطة</span>
                   <span className="mx-1 text-slate-400">·</span>
                   <span className="text-slate-600">
-                    {t.up_to_minutes != null ? `حتى ${t.up_to_minutes} دقيقة` : 'بعد كده'}
+                    {t.up_to_minutes != null ? `حتى ${t.up_to_minutes} دقيقة` : 'لحد نهاية الفعالية'}
                   </span>
                 </div>
               ))}
@@ -286,5 +311,33 @@ export default function AdminEvents() {
         </section>
       ))}
     </div>
+  );
+}
+
+// وقت النهاية: بيتعدّل من هنا، وفاضي = مفيش حد أقصى
+function EndTime({ ev, busy, onSave }) {
+  const current = ev.end_time?.slice(0, 5) ?? '';
+  const [val, setVal] = useState(current);
+  useEffect(() => setVal(current), [current]);
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        type="time"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        className="rounded-lg border border-slate-300 px-1 py-0.5 font-mono text-sm"
+      />
+      {val !== current && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onSave(ev, val)}
+          className="rounded-lg bg-indigo-700 px-2 py-0.5 text-xs font-bold text-white"
+        >
+          حفظ
+        </button>
+      )}
+      {!current && <span className="text-xs text-amber-600">(من غير حد أقصى)</span>}
+    </span>
   );
 }

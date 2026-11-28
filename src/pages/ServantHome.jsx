@@ -19,13 +19,16 @@ export default function ServantHome({ profile }) {
       }
       if (ids && ids.length === 0) return setEvents([]);
 
-      let q = supabase.from('events').select('id,name,start_time').eq('is_active', true).order('start_time');
+      let q = supabase.from('events').select('id,name,start_time,end_time').eq('is_active', true).order('start_time');
       if (ids) q = q.in('id', ids);
       const { data } = await q;
       setEvents(data ?? []);
       if (data?.length) setSelEvent(String(data[0].id));
     })();
   }, [profile.id, profile.role]);
+
+  const event = events?.find((e) => String(e.id) === selEvent);
+  const ended = isEnded(event);
 
   return (
     <div className="mx-auto max-w-md space-y-4 p-6">
@@ -58,7 +61,7 @@ export default function ServantHome({ profile }) {
             >
               {events.map((ev) => (
                 <option key={ev.id} value={String(ev.id)}>
-                  {ev.name} — {ev.start_time?.slice(0, 5)}
+                  {ev.name} — {ev.start_time?.slice(0, 5)}{ev.end_time ? ` إلى ${ev.end_time.slice(0, 5)}` : ''}
                 </option>
               ))}
             </select>
@@ -67,19 +70,32 @@ export default function ServantHome({ profile }) {
           <nav className="flex gap-2">
             <Tab active={tab === 'camera'} onClick={() => setTab('camera')}>📷 مسح بالكاميرا</Tab>
             <Tab active={tab === 'list'} onClick={() => setTab('list')}>بحث بالاسم</Tab>
+            <Tab active={tab === 'summary'} onClick={() => setTab('summary')}>ملخص</Tab>
           </nav>
 
-          {tab === 'camera' && <CameraTab eventId={selEvent} />}
-          {tab === 'list' && <ListTab eventId={selEvent} />}
+          {ended && tab !== 'summary' && (
+            <p className="rounded-2xl bg-red-50 p-4 text-center font-bold text-red-600">
+              الفعالية خلصت الساعة {event.end_time.slice(0, 5)} — مينفعش تسجيل حضور دلوقتي.
+            </p>
+          )}
+
+          {tab === 'camera' && !ended && <CameraTab eventId={selEvent} />}
+          {tab === 'list' && !ended && <ListTab eventId={selEvent} />}
+          {tab === 'summary' && <SummaryTab event={event} profile={profile} ended={ended} />}
         </>
       )}
     </div>
   );
 }
 
+const cairoDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+const cairoTime = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Cairo', hour12: false }).slice(0, 5);
+const isEnded = (ev) => !!ev?.end_time && cairoTime() > ev.end_time.slice(0, 5);
+
 // بيحوّل نتيجة الـ record_scan لرسالة للخادم
 function describe(data, fallbackName) {
   const name = data?.kid || fallbackName || '';
+  if (data?.type === 'closed') return { ok: false, text: 'الفعالية خلصت — مينفعش تسجيل' };
   if (data?.type === 'duplicate') return { ok: false, text: `"${name}" اتسجل حضوره قبل كده` };
   if (data?.type === 'unknown') return { ok: false, text: 'الكارت ده مش معروف' };
   return { ok: true, text: `✅ ${name} — ${data?.points ?? 0} نقطة` };
@@ -88,6 +104,7 @@ function describe(data, fallbackName) {
 function friendlyError(e) {
   const m = e?.message ?? '';
   if (m.includes('event not allowed')) return 'الفعالية دي مش مسموحة ليك';
+  if (m.includes('not your scan')) return 'ده مش تسجيلك';
   if (m.includes('event not found')) return 'الفعالية موقوفة';
   return m || 'حصلت مشكلة';
 }
@@ -229,19 +246,7 @@ function ListTab({ eventId }) {
   return (
     <div className="space-y-4 rounded-2xl bg-white p-5 shadow">
       <label className="block space-y-1">
-        <span className="text-sm font-semibold text-slate-600">ابحث بالاسم</span>
-        <input
-          type="search"
-          className="w-full rounded-xl border border-slate-300 px-3 py-2"
-          placeholder="اكتب أي جزء من الاسم..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setSelKid(null); setMsg(null); }}
-          autoComplete="off"
-        />
-      </label>
-
-      <label className="block space-y-1">
-        <span className="text-sm font-semibold text-slate-600">الفصل (اختياري)</span>
+        <span className="text-sm font-semibold text-slate-600">الفصل</span>
         <select
           className="w-full rounded-xl border border-slate-300 px-3 py-2"
           value={selClass}
@@ -252,6 +257,18 @@ function ListTab({ eventId }) {
             <option key={c.id} value={String(c.id)}>{c.name}</option>
           ))}
         </select>
+      </label>
+
+      <label className="block space-y-1">
+        <span className="text-sm font-semibold text-slate-600">ابحث بالاسم</span>
+        <input
+          type="search"
+          className="w-full rounded-xl border border-slate-300 px-3 py-2"
+          placeholder="اكتب أي جزء من الاسم..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setSelKid(null); setMsg(null); }}
+          autoComplete="off"
+        />
       </label>
 
       <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-xl border border-slate-200">
@@ -285,6 +302,145 @@ function ListTab({ eventId }) {
       >
         {loading ? '...' : selKid ? `✓ تسجيل حضور ${selKid.full_name}` : 'اختار المخدوم من النتايج'}
       </button>
+    </div>
+  );
+}
+
+
+/* ——— ملخص النهارده للفعالية ——— */
+const TIER = {
+  1: { label: 'في الموعد', cls: 'bg-green-100 text-green-700' },
+  2: { label: 'متأخر شوية', cls: 'bg-amber-100 text-amber-700' },
+};
+const tierOf = (pos) => TIER[pos] ?? { label: 'متأخر', cls: 'bg-orange-100 text-orange-700' };
+
+function SummaryTab({ event, profile, ended }) {
+  const [scans, setScans] = useState(null);
+  const [kids, setKids] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [mine, setMine] = useState(true);
+  const [confirmId, setConfirmId] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    const [sc, k, c] = await Promise.all([
+      supabase
+        .from('scans')
+        .select('id,scanned_at,points,position,scanned_by,kid_id,kids(full_name,class_id)')
+        .eq('event_id', event.id)
+        .eq('service_date', cairoDate())
+        .order('scanned_at', { ascending: false }),
+      supabase.from('kids').select('id,full_name,class_id').eq('is_active', true).order('full_name'),
+      supabase.from('classes').select('id,name').order('name'),
+    ]);
+    if (sc.error) throw sc.error;
+    setScans(sc.data);
+    setKids(k.data ?? []);
+    setClasses(c.data ?? []);
+  }, [event.id]);
+
+  useEffect(() => {
+    load().catch((e) => setErr(e.message));
+  }, [load]);
+
+  async function undo(scan) {
+    setBusy(true);
+    setErr('');
+    try {
+      const { data, error } = await supabase.rpc('undo_scan', { p_scan_id: scan.id });
+      if (error) throw error;
+      if (data?.type === 'closed') throw new Error('الفعالية خلصت — مينفعش تراجع');
+      setConfirmId(null);
+      await load();
+    } catch (e) {
+      setErr(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!scans) return <p className="text-center text-slate-500">{err || 'جاري التحميل...'}</p>;
+
+  const myScans = scans.filter((s) => s.scanned_by === profile.id);
+  const shown = mine ? myScans : scans;
+  const scannedIds = new Set(scans.map((s) => s.kid_id));
+  const missing = kids.filter((k) => !scannedIds.has(k.id));
+  const className = (id) => classes.find((c) => c.id === id)?.name ?? '';
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <Stat label="سجّلت أنا" value={myScans.length} />
+        <Stat label={`الكل من ${kids.length}`} value={scans.length} />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Tab active={mine} onClick={() => setMine(true)}>أنا</Tab>
+        <Tab active={!mine} onClick={() => setMine(false)}>الكل</Tab>
+        <button onClick={() => load().catch((e) => setErr(e.message))} className="ms-auto rounded-xl bg-slate-200 px-3 py-2 text-sm font-semibold">
+          ↻ تحديث
+        </button>
+      </div>
+
+      {err && <p className="rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-600">{err}</p>}
+
+      <ul className="divide-y divide-slate-100 rounded-2xl bg-white shadow">
+        {shown.length === 0 && <li className="p-4 text-center text-sm text-slate-400">لسه مفيش تسجيلات</li>}
+        {shown.map((s) => {
+          const t = tierOf(s.position);
+          const isMine = s.scanned_by === profile.id || profile.role === 'admin';
+          return (
+            <li key={s.id} className="flex items-center gap-2 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-slate-800">{s.kids?.full_name}</p>
+                <p className="text-xs text-slate-400">
+                  {className(s.kids?.class_id)} · {new Date(s.scanned_at).toLocaleTimeString('ar-EG', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+              <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-bold ${t.cls}`}>
+                {t.label} · {s.points}
+              </span>
+              {isMine && !ended && (
+                confirmId === s.id ? (
+                  <span className="flex shrink-0 gap-2">
+                    <button disabled={busy} onClick={() => undo(s)} className="text-xs font-bold text-red-600">تأكيد</button>
+                    <button onClick={() => setConfirmId(null)} className="text-xs font-semibold text-slate-500">إلغاء</button>
+                  </span>
+                ) : (
+                  <button onClick={() => setConfirmId(s.id)} className="shrink-0 text-xs font-semibold text-red-600">رجّع</button>
+                )
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <details className="rounded-2xl bg-white p-4 shadow">
+        <summary className="cursor-pointer font-bold text-slate-700">لسه ماحضروش ({missing.length})</summary>
+        <div className="mt-3 space-y-3">
+          {classes.map((c) => {
+            const list = missing.filter((k) => k.class_id === c.id);
+            if (list.length === 0) return null;
+            return (
+              <div key={c.id}>
+                <p className="text-sm font-bold text-indigo-800">{c.name} ({list.length})</p>
+                <p className="text-sm text-slate-600">{list.map((k) => k.full_name).join(' ، ')}</p>
+              </div>
+            );
+          })}
+          {missing.length === 0 && <p className="text-sm text-green-700">كله حضر 🎉</p>}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-white p-4 text-center shadow">
+      <div className="text-3xl font-extrabold text-indigo-900">{value}</div>
+      <div className="text-sm text-slate-500">{label}</div>
     </div>
   );
 }
