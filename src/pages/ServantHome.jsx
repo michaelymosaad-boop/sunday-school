@@ -9,23 +9,18 @@ export default function ServantHome({ profile }) {
   const [events, setEvents] = useState(null); // null = لسه بيحمّل
   const [selEvent, setSelEvent] = useState('');
 
-  // الفعاليات المسموحة: الأدمن يشوف كل النشطة، والخادم يشوف المسندة له بس
+  const [loadErr, setLoadErr] = useState('');
+
+  // فعاليات النهارده المسموحة: السيرفر بيحدد حسب الجدول والصلاحية (الأدمن يشوف كل فعاليات النهارده)
   useEffect(() => {
     (async () => {
-      let ids = null;
-      if (profile.role !== 'admin') {
-        const { data } = await supabase.from('staff_events').select('event_id').eq('staff_id', profile.id);
-        ids = (data ?? []).map((r) => r.event_id);
-      }
-      if (ids && ids.length === 0) return setEvents([]);
-
-      let q = supabase.from('events').select('id,name,start_time,end_time').eq('is_active', true).order('start_time');
-      if (ids) q = q.in('id', ids);
-      const { data } = await q;
-      setEvents(data ?? []);
-      if (data?.length) setSelEvent(String(data[0].id));
+      const { data, error } = await supabase.rpc('my_events_today');
+      if (error) setLoadErr(error.message);
+      const list = error ? [] : data ?? [];
+      setEvents(list);
+      if (list.length) setSelEvent(String(list[0].id));
     })();
-  }, [profile.id, profile.role]);
+  }, []);
 
   const event = events?.find((e) => String(e.id) === selEvent);
   const ended = isEnded(event);
@@ -46,7 +41,7 @@ export default function ServantHome({ profile }) {
 
       {events?.length === 0 && (
         <p className="rounded-2xl bg-amber-50 p-4 text-center font-semibold text-amber-800">
-          مفيش فعاليات مسندة ليك دلوقتي. كلّم الأدمن.
+          {loadErr ? `حصلت مشكلة: ${loadErr}` : 'مفيش فعاليات ليك النهارده.'}
         </p>
       )}
 
@@ -95,6 +90,7 @@ const isEnded = (ev) => !!ev?.end_time && cairoTime() > ev.end_time.slice(0, 5);
 // بيحوّل نتيجة الـ record_scan لرسالة للخادم
 function describe(data, fallbackName) {
   const name = data?.kid || fallbackName || '';
+  if (data?.type === 'not_today') return { ok: false, text: 'الفعالية دي مش النهارده' };
   if (data?.type === 'closed') return { ok: false, text: 'الفعالية خلصت — مينفعش تسجيل' };
   if (data?.type === 'duplicate') return { ok: false, text: `"${name}" اتسجل حضوره قبل كده` };
   if (data?.type === 'unknown') return { ok: false, text: 'الكارت ده مش معروف' };
@@ -350,7 +346,8 @@ function SummaryTab({ event, profile, ended }) {
     try {
       const { data, error } = await supabase.rpc('undo_scan', { p_scan_id: scan.id });
       if (error) throw error;
-      if (data?.type === 'closed') throw new Error('الفعالية خلصت — مينفعش تراجع');
+      if (data?.type === 'not_today') return { ok: false, text: 'الفعالية دي مش النهارده' };
+  if (data?.type === 'closed') throw new Error('الفعالية خلصت — مينفعش تراجع');
       setConfirmId(null);
       await load();
     } catch (e) {
